@@ -1,11 +1,11 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.snake_and_ladders">
     <application
+        android:label="مار و پەیژە"
+        android:icon="@mipmap/ic_launcher">
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-        android:label="مار و پەیژە"
-        android:icon="@mipmap/ic_launcher">
         <activity
             android:name=".MainActivity"
             android:exported="true"
