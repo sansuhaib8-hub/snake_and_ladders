@@ -1,222 +1,597 @@
 import 'package:flutter/material.dart';
-import 'dart:math';
+import 'dart:math' as math;
 import 'dart:async';
 
 void main() {
-  runApp(const SnakeAndLaddersApp());
+  runApp(const CyberSnakeLaddersApp());
 }
 
-class SnakeAndLaddersApp extends StatelessWidget {
-  const SnakeAndLaddersApp({super.key});
+class CyberSnakeLaddersApp extends StatelessWidget {
+  const CyberSnakeLaddersApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'مار و پەیژە',
+      title: 'کایەی مار و پەیژە',
       theme: ThemeData(
-        primarySwatch: Colors.green,
-        fontFamily: 'Arial', // Default font for simplicity
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF0D0E15),
+          brightness: Brightness.dark,
+        ),
+        fontFamily: 'Segoe UI',
       ),
-      home: const GamePage(),
+      home: const CyberGamePage(),
       debugShowCheckedModeBanner: false,
     );
   }
 }
 
-class GamePage extends StatefulWidget {
-  const GamePage({super.key});
+class Player {
+  String name;
+  int position;
+  Color color;
+  int score;
 
-  @override
-  State<GamePage> createState() => _GamePageState();
+  Player({required this.name, this.position = 1, required this.color, this.score = 0});
 }
 
-class _GamePageState extends State<GamePage> {
-  int playerPosition = 0;
+class CyberGamePage extends StatefulWidget {
+  const CyberGamePage({super.key});
+
+  @override
+  State<CyberGamePage> createState() => _CyberGamePageState();
+}
+
+class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateMixin {
+  List<Player> players = [
+    Player(name: "یاریزان ١", color: const Color(0xFF00FFFF)),
+    Player(name: "یاریزان ٢", color: const Color(0xFFFF00FF)),
+  ];
+  
+  int currentPlayerIndex = 0;
   int diceValue = 1;
   bool isRolling = false;
-  String message = "بەخێربێیت بۆ یاری مار و پەیژە!";
+  bool isMoving = false;
+  bool gameFinished = false;
+  String message = "بەخێربێیت! یاریزان زیاد بکە و دەستپێبکە 🎮";
 
-  // Snakes: Start -> End
+  late AnimationController _diceController;
+  late AnimationController _bounceController;
+  late AnimationController _liveBoardController;
+  late Animation<double> _bounceAnimation;
+
   final Map<int, int> snakes = {
-    16: 5,
-    46: 24,
-    48: 29,
-    61: 18,
-    63: 59,
-    86: 23,
-    92: 72,
-    94: 74,
-    97: 77,
-    98: 78,
+    17: 7, 54: 34, 62: 19, 64: 60, 87: 24, 93: 73, 95: 75, 99: 78,
   };
 
-  // Ladders: Start -> End
   final Map<int, int> ladders = {
-    1: 37,
-    3: 13,
-    7: 30,
-    20: 41,
-    27: 83,
-    35: 43,
-    50: 66,
-    70: 90,
-    79: 99,
+    4: 14, 9: 31, 20: 38, 28: 84, 40: 59, 51: 67, 63: 81, 71: 91,
   };
 
-  void rollDice() {
-    if (isRolling) return;
+  @override
+  void initState() {
+    super.initState();
+    _diceController = AnimationController(duration: const Duration(milliseconds: 600), vsync: this);
+    _bounceController = AnimationController(duration: const Duration(milliseconds: 250), vsync: this);
+    _liveBoardController = AnimationController(duration: const Duration(seconds: 3), vsync: this)..repeat();
 
-    setState(() {
-      isRolling = true;
-      message = "خەریکی هاوێشتنی زارەکە...";
-    });
-
-    Timer(const Duration(milliseconds: 600), () {
-      setState(() {
-        diceValue = Random().nextInt(6) + 1;
-        int nextPosition = playerPosition + diceValue;
-
-        if (nextPosition > 99) {
-          message = "پێویستت بە ژمارەی تەواو هەیە بۆ بردنەوە!";
-        } else {
-          playerPosition = nextPosition;
-          message = "زارەکە: $diceValue";
-
-          // Check for Ladders
-          if (ladders.containsKey(playerPosition)) {
-            playerPosition = ladders[playerPosition]!;
-            message += " - دەستخۆش! بە پەیژەکەدا سەرکەوتیت!";
-          }
-          // Check for Snakes
-          else if (snakes.containsKey(playerPosition)) {
-            playerPosition = snakes[playerPosition]!;
-            message += " - ئای! مارەکە گەستی!";
-          }
-
-          if (playerPosition == 99) {
-            message = "پیرۆزە! تۆ یارییەکەت بردەوە!";
-          }
-        }
-        isRolling = false;
-      });
-    });
-  }
-
-  void resetGame() {
-    setState(() {
-      playerPosition = 0;
-      diceValue = 1;
-      message = "بەخێربێیت بۆ یاری مار و پەیژە!";
-    });
+    _bounceAnimation = TweenSequence<double>([
+      TweenSequenceItem(tween: Tween<double>(begin: 0.0, end: -20.0).chain(CurveTween(curve: Curves.easeOut)), weight: 50),
+      TweenSequenceItem(tween: Tween<double>(begin: -20.0, end: 0.0).chain(CurveTween(curve: Curves.bounceIn)), weight: 50),
+    ]).animate(_bounceController);
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('یاری مار و پەیژە'),
-        centerTitle: true,
+  void dispose() {
+    _diceController.dispose();
+    _bounceController.dispose();
+    _liveBoardController.dispose();
+    super.dispose();
+  }
+
+  void _showAddPlayerDialog() {
+    if (players.length >= 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("ناتوانیت لە ٤ یاریزان زیاتر زیاد بکەیت!"))
+      );
+      return;
+    }
+
+    final textController = TextEditingController();
+    final List<Color> availableColors = [
+      const Color(0xFF00FF66),
+      const Color(0xFFFFCC00),
+    ];
+    Color playerColor = availableColors[players.length - 2];
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF141522),
+        title: const Text("زیادکردنی یاریزان", style: TextStyle(color: Colors.white)),
+        content: TextField(
+          controller: textController,
+          autofocus: true,
+          style: const TextStyle(color: Colors.white),
+          decoration: InputDecoration(
+            hintText: "ناوی یاریزان بنووسە...",
+            hintStyle: const TextStyle(color: Colors.white38),
+            enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: playerColor)),
+            focusedBorder: UnderlineInputBorder(borderSide: BorderSide(color: playerColor, width: 2)),
+          ),
+        ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: resetGame,
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text("پاشگەزبوونەوە", style: TextStyle(color: Colors.white54)),
           ),
-        ],
-      ),
-      body: Column(
-        children: [
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.all(8.0),
-              child: GridView.builder(
-                reverse: true,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 10,
-                ),
-                itemCount: 100,
-                itemBuilder: (context, index) {
-                  int cellIndex = index;
-                  // Handle Boustrophedon (snake-like) numbering
-                  int row = index ~/ 10;
-                  int col = index % 10;
-                  if (row % 2 == 1) {
-                    cellIndex = (row * 10) + (9 - col);
-                  }
-
-                  bool isPlayerHere = cellIndex == playerPosition;
-                  bool isSnake = snakes.containsKey(cellIndex);
-                  bool isLadder = ladders.containsKey(cellIndex);
-
-                  return Container(
-                    margin: const EdgeInsets.all(1),
-                    decoration: BoxDecoration(
-                      color: (cellIndex % 2 == 0) ? Colors.green[100] : Colors.green[200],
-                      border: Border.all(color: Colors.green[800]!, width: 0.5),
-                    ),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Text(
-                          '${cellIndex + 1}',
-                          style: const TextStyle(fontSize: 10, color: Colors.black54),
-                        ),
-                        if (isSnake)
-                          const Icon(Icons.bug_report, color: Colors.red, size: 16),
-                        if (isLadder)
-                          const Icon(Icons.stairs, color: Colors.blue, size: 16),
-                        if (isPlayerHere)
-                          const Icon(Icons.person, color: Colors.deepPurple, size: 24),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(20),
-            color: Colors.grey[200],
-            child: Column(
-              children: [
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 20),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 60,
-                      height: 60,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.black),
-                      ),
-                      child: Center(
-                        child: Text(
-                          isRolling ? "?" : "$diceValue",
-                          style: const TextStyle(fontSize: 32, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 20),
-                    ElevatedButton(
-                      onPressed: isRolling || playerPosition == 99 ? null : rollDice,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                      ),
-                      child: const Text('زارەکە بهاوێژە', style: TextStyle(fontSize: 18)),
-                    ),
-                  ],
-                ),
-              ],
-            ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: playerColor),
+            onPressed: () {
+              if (textController.text.trim().isNotEmpty) {
+                setState(() {
+                  players.add(Player(
+                    name: textController.text.trim(),
+                    color: playerColor,
+                  ));
+                  message = "${textController.text.trim()} هاتە ناو یارییەکەوە! 🎉";
+                });
+                Navigator.pop(context);
+              }
+            },
+            child: const Text("زیادبکە", style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
           ),
         ],
       ),
     );
   }
+
+  Offset _getCellCoordinates(int position, double cellSize, int playerIndex) {
+    int zeroIndexed = position - 1;
+    int row = zeroIndexed ~/ 10;
+    int col = zeroIndexed % 10;
+
+    if (row % 2 == 1) col = 9 - col;
+
+    double x = col * cellSize;
+    double y = (9 - row) * cellSize;
+
+    double offsetX = (playerIndex % 2 == 0) ? 2.0 : cellSize * 0.3;
+    double offsetY = (playerIndex < 2) ? 2.0 : cellSize * 0.3;
+
+    return Offset(x + offsetX, y + offsetY);
+  }
+
+  void rollDice() async {
+    if (isRolling || isMoving || gameFinished) return;
+
+    Player currentPlayer = players[currentPlayerIndex];
+
+    setState(() {
+      isRolling = true;
+      message = "زارەکە بۆ [ ${currentPlayer.name} ] دەسوڕێتەوە... 🎲";
+    });
+
+    _diceController.forward(from: 0.0);
+    await Future.delayed(const Duration(milliseconds: 600));
+
+    final randomResult = math.Random().nextInt(6) + 1;
+    setState(() {
+      diceValue = randomResult;
+      isRolling = false;
+    });
+
+    int targetPos = currentPlayer.position + diceValue;
+
+    if (targetPos > 100) {
+      setState(() {
+        message = "⚠️ ${currentPlayer.name} پێویستی بە ژمارەی تەواو هەیە بۆ بردنەوە!";
+        _nextTurn();
+      });
+      return;
+    }
+
+    isMoving = true;
+
+    for (int i = currentPlayer.position + 1; i <= targetPos; i++) {
+      setState(() {
+        currentPlayer.position = i;
+        currentPlayer.score += 1;
+      });
+      _bounceController.forward(from: 0.0);
+      await Future.delayed(const Duration(milliseconds: 280));
+    }
+
+    if (ladders.containsKey(currentPlayer.position)) {
+      int nextPos = ladders[currentPlayer.position]!;
+      setState(() { message = "🪜⚡ بژیت ${currentPlayer.name}! بە پەیژەدا سەرکەوت بۆ $nextPos!"; });
+      await Future.delayed(const Duration(milliseconds: 700));
+      setState(() { currentPlayer.position = nextPos; currentPlayer.score += 15; });
+      _bounceController.forward(from: 0.0);
+    } else if (snakes.containsKey(currentPlayer.position)) {
+      int nextPos = snakes[currentPlayer.position]!;
+      setState(() { message = "🐍💥 ئاخ! مار پێوەی دا [ ${currentPlayer.name} ] دابەزی بۆ $nextPos!"; });
+      await Future.delayed(const Duration(milliseconds: 700));
+      setState(() { currentPlayer.position = nextPos; currentPlayer.score = math.max(0, currentPlayer.score - 10); });
+      _bounceController.forward(from: 0.0);
+    }
+
+    if (currentPlayer.position == 100) {
+      setState(() {
+        gameFinished = true;
+        message = "👑 پیرۆزە! [ ${currentPlayer.name} ] یارییەکەی بردەوە! 👑";
+      });
+      isMoving = false;
+      return;
+    }
+
+    _nextTurn();
+    isMoving = false;
+  }
+
+  void _nextTurn() {
+    setState(() {
+      currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+    });
+  }
+
+  void resetGame() {
+    if (isMoving || isRolling) return;
+    setState(() {
+      for (var player in players) {
+        player.position = 1;
+        player.score = 0;
+      }
+      currentPlayerIndex = 0;
+      diceValue = 1;
+      gameFinished = false;
+      message = "یارییەکە نوێکرایەوە! نۆرەی [ ${players[0].name} ] یە 🔥";
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Player activePlayer = players[currentPlayerIndex];
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF090A0F),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            colors: [Color(0xFF090A0F), Color(0xFF141522)],
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+          ),
+        ),
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text("مار و پەیژە", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white)),
+                        Text("نۆرەی: ${activePlayer.name}", style: TextStyle(fontSize: 14, color: activePlayer.color, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                    Row(
+                      children: [
+                        if (players.length < 4 && !isMoving && !isRolling)
+                          IconButton(
+                            icon: const Icon(Icons.person_add_alt_1_rounded, color: Colors.cyanAccent),
+                            onPressed: _showAddPlayerDialog,
+                            style: IconButton.styleFrom(backgroundColor: Colors.white.withOpacity(0.05), padding: const EdgeInsets.all(10)),
+                          ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.refresh_rounded, color: Colors.amber),
+                          onPressed: resetGame,
+                          style: IconButton.styleFrom(backgroundColor: Colors.white.withOpacity(0.05), padding: const EdgeInsets.all(10)),
+                        ),
+                      ],
+                    )
+                  ],
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.02),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white.withOpacity(0.05)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: List.generate(players.length, (index) {
+                      bool isCurrent = index == currentPlayerIndex;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: isCurrent ? players[index].color.withOpacity(0.15) : Colors.transparent,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: isCurrent ? players[index].color : Colors.transparent),
+                        ),
+                        child: Column(
+                          children: [
+                            Text(players[index].name, style: TextStyle(fontSize: 11, color: isCurrent ? Colors.white : Colors.white54, fontWeight: FontWeight.bold)),
+                            Text("خانەی ${players[index].position}", style: TextStyle(fontSize: 13, color: players[index].color, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              Expanded(
+                child: Center(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(color: activePlayer.color.withOpacity(0.3)),
+                        boxShadow: [BoxShadow(color: activePlayer.color.withOpacity(0.02), blurRadius: 30, spreadRadius: 5)],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(28),
+                        child: AspectRatio(
+                          aspectRatio: 1.0,
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final boardSize = constraints.maxWidth;
+                              final cellSize = boardSize / 10;
+
+                              return Stack(
+                                children: [
+                                  GridView.builder(
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 10),
+                                    itemCount: 100,
+                                    itemBuilder: (context, index) {
+                                      int vRow = index ~/ 10, vCol = index % 10, mathRow = 9 - vRow;
+                                      int cellNum = (mathRow % 2 == 0) ? (mathRow * 10 + vCol + 1) : (mathRow * 10 + (9 - vCol) + 1);
+                                      bool isSpecial = snakes.containsKey(cellNum) || ladders.containsKey(cellNum);
+
+                                      return Container(
+                                        decoration: BoxDecoration(
+                                          color: isSpecial ? Colors.white.withOpacity(0.04) : (cellNum % 2 == 0 ? const Color(0xFF161828).withOpacity(0.6) : const Color(0xFF0E101E).withOpacity(0.8)),
+                                          border: Border.all(color: Colors.white.withOpacity(0.03), width: 0.5),
+                                        ),
+                                      );
+                                    },
+                                  ),
+
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: AnimatedBuilder(
+                                        animation: _liveBoardController,
+                                        builder: (context, child) {
+                                          return CustomPaint(
+                                            painter: LiveBoardPainter(
+                                              snakes: snakes,
+                                              ladders: ladders,
+                                              animationValue: _liveBoardController.value,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+
+                                  GridView.builder(
+                                    physics: const NeverScrollableScrollPhysics(),
+                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 10),
+                                    itemCount: 100,
+                                    itemBuilder: (context, index) {
+                                      int vRow = index ~/ 10, vCol = index % 10, mathRow = 9 - vRow;
+                                      int cellNum = (mathRow % 2 == 0) ? (mathRow * 10 + vCol + 1) : (mathRow * 10 + (9 - vCol) + 1);
+                                      return Stack(
+                                        children: [
+                                          Positioned(
+                                            top: 3, left: 3,
+                                            child: Text("$cellNum", style: const TextStyle(fontSize: 8, color: Colors.white38, fontWeight: FontWeight.bold)),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  ),
+
+                                  ...List.generate(players.length, (index) {
+                                    final p = players[index];
+                                    final coords = _getCellCoordinates(p.position, cellSize, index);
+                                    bool isCurrentMoving = (index == currentPlayerIndex && isMoving);
+
+                                    return AnimatedPositioned(
+                                      duration: Duration(milliseconds: isCurrentMoving ? 280 : 400),
+                                      curve: Curves.easeInOut,
+                                      left: coords.dx,
+                                      top: coords.dy,
+                                      width: cellSize * 0.5,
+                                      height: cellSize * 0.5,
+                                      child: AnimatedBuilder(
+                                        animation: _bounceAnimation,
+                                        builder: (context, child) {
+                                          double bValue = isCurrentMoving ? _bounceAnimation.value : 0.0;
+                                          return Transform.translate(offset: Offset(0, bValue), child: child);
+                                        },
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            gradient: RadialGradient(colors: [p.color, p.color.withOpacity(0.6)]),
+                                            border: Border.all(color: Colors.white, width: 1.5),
+                                            boxShadow: [BoxShadow(color: p.color.withOpacity(0.5), blurRadius: 8)],
+                                          ),
+                                          child: Center(
+                                            child: Text(
+                                              p.name.characters.first,
+                                              style: const TextStyle(fontSize: 9, color: Colors.black, fontWeight: FontWeight.bold),
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              );
+                            },
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: activePlayer.color.withOpacity(0.03),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: activePlayer.color.withOpacity(0.15)),
+                  ),
+                  child: Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white),
+                  ),
+                ),
+              ),
+
+              Padding(
+                padding: const EdgeInsets.only(left: 20, right: 20, bottom: 20),
+                child: Row(
+                  children: [
+                    RotationTransition(
+                      turns: Tween<double>(begin: 0, end: 2).animate(CurvedAnimation(parent: _diceController, curve: Curves.easeInOutBack)),
+                      child: Container(
+                        width: 70, height: 70,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(colors: [activePlayer.color.withOpacity(0.6), const Color(0xFF141522)]),
+                          borderRadius: BorderRadius.circular(18),
+                          border: Border.all(color: activePlayer.color.withOpacity(0.5)),
+                          boxShadow: [BoxShadow(color: activePlayer.color.withOpacity(0.3), blurRadius: 12)],
+                        ),
+                        child: Center(
+                          child: Text(isRolling ? "?" : "$diceValue", style: const TextStyle(fontSize: 32, fontWeight: FontWeight.w900, color: Colors.white)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 14),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: isRolling || isMoving || gameFinished ? null : rollDice,
+                        icon: const Icon(Icons.casino_rounded, size: 24),
+                        label: Text('[ ${activePlayer.name} ] زار بهاوێژە', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: activePlayer.color,
+                          foregroundColor: Colors.black,
+                          padding: const EdgeInsets.symmetric(vertical: 18),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class LiveBoardPainter extends CustomPainter {
+  final Map<int, int> snakes;
+  final Map<int, int> ladders;
+  final double animationValue;
+
+  LiveBoardPainter({required this.snakes, required this.ladders, required this.animationValue});
+
+  Offset _getCellCenter(int cellNum, Size size) {
+    double cellW = size.width / 10;
+    double cellH = size.height / 10;
+    int zeroIndexed = cellNum - 1;
+    int row = zeroIndexed ~/ 10;
+    int col = zeroIndexed % 10;
+    if (row % 2 == 1) col = 9 - col;
+    return Offset((col + 0.5) * cellW, (9 - row + 0.5) * cellH);
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paintLadder = Paint()..style = PaintingStyle.stroke..strokeWidth = 3.5..strokeCap = StrokeCap.round;
+    final paintRung = Paint()..style = PaintingStyle.stroke..strokeWidth = 2.0..strokeCap = StrokeCap.round;
+
+    ladders.forEach((start, end) {
+      Offset pStart = _getCellCenter(start, size);
+      Offset pEnd = _getCellCenter(end, size);
+      final goldShader = const LinearGradient(colors: [Color(0xFFFFD700), Color(0xFFD4AF37)]).createShader(Rect.fromPoints(pStart, pEnd));
+      paintLadder.shader = goldShader;
+      paintRung.shader = goldShader;
+
+      Offset dir = pEnd - pStart;
+      Offset norm = Offset(-dir.dy, dir.dx) / dir.distance;
+      double offsetDist = size.width * 0.012;
+
+      Offset startL = pStart + norm * offsetDist, startR = pStart - norm * offsetDist;
+      Offset endL = pEnd + norm * offsetDist, endR = pEnd - norm * offsetDist;
+
+      canvas.drawLine(startL, endL, paintLadder);
+      canvas.drawLine(startR, endR, paintLadder);
+
+      int rungsCount = (dir.distance / 18).round();
+      for (int i = 1; i < rungsCount; i++) {
+        double t = i / rungsCount;
+        canvas.drawLine(Offset.lerp(startL, endL, t)!, Offset.lerp(startR, endR, t)!, paintRung);
+      }
+    });
+
+    snakes.forEach((start, end) {
+      Offset headPos = _getCellCenter(start, size);
+      Offset tailPos = _getCellCenter(end, size);
+      Offset dir = tailPos - headPos;
+      double dist = dir.distance;
+      Offset norm = Offset(-dir.dy, dir.dx) / dist;
+
+      Path snakePath = Path();
+      int segments = 30;
+
+      for (int i = 0; i <= segments; i++) {
+        double t = i / segments;
+        Offset basePt = Offset.lerp(headPos, tailPos, t)!;
+        double wave = math.sin(t * math.pi * 5 - animationValue * math.pi * 3);
+        double taper = math.sin(t * math.pi);
+        double amplitude = size.width * 0.025;
+        Offset pt = basePt + norm * wave * taper * amplitude;
+
+        if (i == 0) {
+          snakePath.moveTo(pt.dx, pt.dy);
+        } else {
+          snakePath.lineTo(pt.dx, pt.dy);
+        }
+      }
+
+      canvas.drawPath(snakePath, Paint()..color = const Color(0xFFFF0055).withOpacity(0.3)..strokeWidth = 8..style = PaintingStyle.stroke..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+      canvas.drawPath(snakePath, Paint()..shader = const LinearGradient(colors: [Color(0xFFFF0055), Color(0xFF800020)]).createShader(Rect.fromPoints(headPos, tailPos))..strokeWidth = 4..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
+      canvas.drawCircle(headPos, 5, Paint()..color = const Color(0xFFFF0055));
+    });
+  }
+
+  @override
+  bool shouldRepaint(covariant LiveBoardPainter oldDelegate) => oldDelegate.animationValue != animationValue;
 }
