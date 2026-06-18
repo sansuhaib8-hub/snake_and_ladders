@@ -56,13 +56,12 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
   @override
   void dispose() { _diceController.dispose(); _bounceController.dispose(); _liveBoardController.dispose(); super.dispose(); }
 
-  // لۆجیکی نوێی ڕێکخستنی گۆشەی بۆردەکە بەپێی ئاڕاستەی داواکراو
   double _getBoardRotation() {
     switch (currentPlayerIndex) {
-      case 0: return 0.0;                 // ئاسایی
-      case 1: return -math.pi / 2;        // لای چەپی مۆبایل (خوارەوە بۆ سەرەوە)
-      case 2: return math.pi;             // سەرەوەی مۆبایل (تەواو هەڵگەڕاوە)
-      case 3: return math.pi / 2;         // لای ڕاستی مۆبایل (سەرەوە بۆ خوارەوە)
+      case 0: return 0.0;
+      case 1: return -math.pi / 2;
+      case 2: return math.pi;
+      case 3: return math.pi / 2;
       default: return 0.0;
     }
   }
@@ -156,7 +155,6 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
       body: SafeArea(
         child: Column(
           children: [
-            // تابلۆی دەستکاریکردنی زانیاری یاریزانەکان لە سەرەوەی شاشە
             Container(
               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
               margin: const EdgeInsets.all(8),
@@ -213,7 +211,6 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                               final bSize = constraints.maxWidth; final cSize = bSize / 10;
                               return Stack(
                                 children: [
-                                  // بۆردی ٣ دووری لەگەڵ ژمارەکان
                                   GridView.builder(
                                     physics: const NeverScrollableScrollPhysics(), 
                                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 10), 
@@ -223,8 +220,7 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                                       return Container(
                                         decoration: BoxDecoration(
                                           color: idx % 2 == 0 ? const Color(0xFF121424) : const Color(0xFF090A12), 
-                                          border: Border.all(color: Colors.white10, width: 0.3),
-                                          boxShadow: const [BoxShadow(color: Colors.black38, offset: Offset(1, 1), blurRadius: 1, inset: true)]
+                                          border: Border.all(color: Colors.black45, width: 0.5), // ڕەنگی بۆردەر بۆ دروستکردنی قووڵایی چاککراوە
                                         ),
                                         child: Center(
                                           child: AnimatedRotation(
@@ -245,7 +241,6 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                                     },
                                   ),
                                   
-                                  // وێنەکێشی مارە زیندووەکان و پەیژەکان
                                   Positioned.fill(
                                     child: IgnorePointer(
                                       child: AnimatedBuilder(
@@ -264,7 +259,6 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                                     )
                                   ),
                                   
-                                  // مۆرەکان
                                   ...List.generate(players.length, (index) {
                                     final p = players[index]; final coords = _getCellCoordinates(p.position, cSize);
                                     return AnimatedPositioned(
@@ -302,7 +296,6 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
             
             Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(message, style: TextStyle(color: activePlayer.color, fontWeight: FontWeight.bold, fontSize: 14))),
             
-            // دوگمەی زاری نیۆن
             GestureDetector(
               onTap: isRolling || isMoving || gameFinished ? null : rollDice,
               child: Container(
@@ -340,31 +333,25 @@ class AdvancedBoardPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // ١. کێشانی پەیژەی سێ دووری (3D Ladders)
     ladders.forEach((s, e) {
       Offset pS = _getCenter(s, size), pE = _getCenter(e, size);
       double dx = pE.dx - pS.dx; double dy = pE.dy - pS.dy;
       double len = math.sqrt(dx * dx + dy * dy);
-      Offset ox = Offset(-dy / len * 5, dx / len * 5); // دوری نێوان دوو هێڵەکە
+      Offset _ox = Offset(-dy / len * 5, dx / len * 5);
 
-      // کێشانی سێبەری ژێر پەیژەکە
       canvas.drawLine(pS + const Offset(3, 3), pE + const Offset(3, 3), Paint()..color = Colors.black45..strokeWidth = 6.0);
+      canvas.drawLine(pS - _ox, pE - _ox, Paint()..color = const Color(0xFFFFCC00)..strokeWidth = 3.5);
+      canvas.drawLine(pS + _ox, pE + _ox, Paint()..color = const Color(0xFFFFCC00)..strokeWidth = 3.5);
 
-      // ڕاگرە سەرەکییەکان
-      canvas.drawLine(pS - ox, pE - ox, Paint()..color = const Color(0xFFFFCC00)..strokeWidth = 3.5);
-      canvas.drawLine(pS + ox, pE + ox, Paint()..color = const Color(0xFFFFCC00)..strokeWidth = 3.5);
-
-      // پێپەژەکان (Rungs)
       int rungs = (len / 12).floor();
       for (int i = 0; i <= rungs; i++) {
         double t = i / rungs;
-        Offset pR1 = Offset.lerp(pS - ox, pE - ox, t)!;
-        Offset pR2 = Offset.lerp(pS + ox, pE + ox, t)!;
+        Offset pR1 = Offset.lerp(pS - _ox, pE - _ox, t)!;
+        Offset pR2 = Offset.lerp(pS + _ox, pE + _ox, t)!;
         canvas.drawLine(pR1, pR2, Paint()..color = Colors.white70..strokeWidth = 2.0);
       }
     });
 
-    // ٢. کێشانی ماری ئەنیمەیشنی ڕاستەقینە (Animated Snakes with Sinusoidal Wave)
     snakes.forEach((s, e) {
       Offset pS = _getCenter(s, size); Offset pE = _getCenter(e, size);
       Path snakePath = Path();
@@ -377,19 +364,14 @@ class AdvancedBoardPainter extends CustomPainter {
       for (int i = 1; i <= segments; i++) {
         double t = i / segments;
         Offset loc = Offset.lerp(pS, pE, t)!;
-        
-        // دروستکردنی شەپۆل و لەرینەوەی مارەکە بەپێی کات (Live Animation)
         double wave = math.sin((t * math.pi * 3) - (animationValue * math.pi * 2)) * 8;
         Offset normal = Offset(-dy / len * wave, dx / len * wave);
-        
         snakePath.lineTo(loc.dx + normal.dx, loc.dy + normal.dy);
       }
 
-      // کێشانی جەستەی مارەکە بە نیۆنی گەشاوە
       canvas.drawPath(snakePath, Paint()..color = const Color(0xFFFF3366).withOpacity(0.25)..strokeWidth = 10.0..style = PaintingStyle.stroke..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
       canvas.drawPath(snakePath, Paint()..color = const Color(0xFFFF3366)..strokeWidth = 4.0..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
 
-      // کێشانی سەری مارەکە
       canvas.drawCircle(pS, 6, Paint()..color = Colors.redAccent);
       canvas.drawCircle(pS, 2, Paint()..color = Colors.white);
     });
