@@ -18,8 +18,8 @@ class CyberSnakeLaddersApp extends StatelessWidget {
 }
 
 class Player {
-  String name; int position; Color color; int score;
-  Player({required this.name, this.position = 1, required this.color, this.score = 0});
+  String name; int position; Color color;
+  Player({required this.name, this.position = 1, required this.color});
 }
 
 class CyberGamePage extends StatefulWidget {
@@ -32,6 +32,8 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
   List<Player> players = [
     Player(name: "یاریزان ١", color: const Color(0xFF00FFFF)),
     Player(name: "یاریزان ٢", color: const Color(0xFFFF00FF)),
+    Player(name: "یاریزان ٣", color: const Color(0xFF00FF66)),
+    Player(name: "یاریزان ٤", color: const Color(0xFFFFCC00)),
   ];
   int currentPlayerIndex = 0; int diceValue = 1;
   bool isRolling = false; bool isMoving = false; bool gameFinished = false;
@@ -39,7 +41,6 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
   int effectCell = -1; Color effectColor = Colors.transparent; double effectRadius = 0.0;
 
   late AnimationController _diceController, _bounceController, _liveBoardController;
-  late Animation<double> _bounceAnimation;
 
   final Map<int, int> snakes = {17: 7, 54: 34, 62: 19, 64: 60, 87: 24, 93: 73, 95: 75, 99: 78};
   final Map<int, int> ladders = {4: 14, 9: 31, 20: 38, 28: 84, 40: 59, 51: 67, 63: 81, 71: 91};
@@ -49,22 +50,19 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
     super.initState();
     _diceController = AnimationController(duration: const Duration(milliseconds: 600), vsync: this);
     _bounceController = AnimationController(duration: const Duration(milliseconds: 250), vsync: this);
-    _liveBoardController = AnimationController(duration: const Duration(seconds: 4), vsync: this)..repeat();
-    _bounceAnimation = TweenSequence<double>([
-      TweenSequenceItem(tween: Tween<double>(begin: 0.0, end: -15.0).chain(CurveTween(curve: Curves.easeOut)), weight: 50),
-      TweenSequenceItem(tween: Tween<double>(begin: -15.0, end: 0.0).chain(CurveTween(curve: Curves.bounceIn)), weight: 50),
-    ]).animate(_bounceController);
+    _liveBoardController = AnimationController(duration: const Duration(seconds: 2), vsync: this)..repeat();
   }
 
   @override
   void dispose() { _diceController.dispose(); _bounceController.dispose(); _liveBoardController.dispose(); super.dispose(); }
 
-  double _getRotationAngle() {
+  // لۆجیکی نوێی ڕێکخستنی گۆشەی بۆردەکە بەپێی ئاڕاستەی داواکراو
+  double _getBoardRotation() {
     switch (currentPlayerIndex) {
-      case 0: return 0.0; 
-      case 1: return math.pi / 2;
-      case 2: return math.pi; 
-      case 3: return -math.pi / 2;
+      case 0: return 0.0;                 // ئاسایی
+      case 1: return -math.pi / 2;        // لای چەپی مۆبایل (خوارەوە بۆ سەرەوە)
+      case 2: return math.pi;             // سەرەوەی مۆبایل (تەواو هەڵگەڕاوە)
+      case 3: return math.pi / 2;         // لای ڕاستی مۆبایل (سەرەوە بۆ خوارەوە)
       default: return 0.0;
     }
   }
@@ -85,29 +83,39 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
     });
   }
 
-  void _showAddPlayerDialog() {
-    if (players.length >= 4) return;
-    final textController = TextEditingController();
-    Color pColor = players.length == 2 ? const Color(0xFF00FF66) : const Color(0xFFFFCC00);
+  void _showEditPlayerDialog(int index) {
+    final textController = TextEditingController(text: players[index].name);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF11121C),
-        title: const Text("یاریزانی نوێ"),
-        content: TextField(controller: textController, style: const TextStyle(color: Colors.white)),
-        actions: [ElevatedButton(onPressed: () { if (textController.text.trim().isNotEmpty) { setState(() { players.add(Player(name: textController.text.trim(), color: pColor)); }); Navigator.pop(context); } }, child: const Text("زیادکردن"))],
+        title: Text("گۆڕینی ناوی ${players[index].name}", style: const TextStyle(color: Colors.white, fontSize: 16)),
+        content: TextField(
+          controller: textController, 
+          style: const TextStyle(color: Colors.white),
+          decoration: const InputDecoration(enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyan))),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text("پاشگەزمایەوە", style: TextStyle(color: Colors.grey))),
+          ElevatedButton(
+            onPressed: () { 
+              if (textController.text.trim().isNotEmpty) { 
+                setState(() { players[index].name = textController.text.trim(); }); 
+                Navigator.pop(context); 
+              } 
+            }, 
+            child: const Text("تۆمارکردن")
+          )
+        ],
       ),
     );
   }
 
-  Offset _getCellCoordinates(int pos, double cSize, int pIndex) {
+  Offset _getCellCoordinates(int pos, double cSize) {
     int idx = pos - 1; int row = idx ~/ 10; int col = idx % 10;
     if (row % 2 == 1) col = 9 - col;
-    
-    // لۆجیکی جێگیرکردنی مۆرەکە لە سەنتەری خانەکەدا بۆ ڕێگریکردن لە لادان لە کاتی سووڕانەوە
-    double paddingX = (cSize - (cSize * 0.45)) / 2;
-    double paddingY = (cSize - (cSize * 0.45)) / 2;
-    return Offset(col * cSize + paddingX, (9 - row) * cSize + paddingY);
+    double padding = (cSize - (cSize * 0.45)) / 2;
+    return Offset(col * cSize + padding, (9 - row) * cSize + padding);
   }
 
   void rollDice() async {
@@ -141,50 +149,71 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
   @override
   Widget build(BuildContext context) {
     Player activePlayer = players[currentPlayerIndex];
-    double currentTurns = _getRotationAngle() / (2 * math.pi);
+    double currentTurns = _getBoardRotation() / (2 * math.pi);
 
     return Scaffold(
       backgroundColor: const Color(0xFF040508),
       body: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(12),
+            // تابلۆی دەستکاریکردنی زانیاری یاریزانەکان لە سەرەوەی شاشە
+            Container(
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              margin: const EdgeInsets.all(8),
+              decoration: BoxDecoration(color: const Color(0xFF0D0E15), borderRadius: BorderRadius.circular(16)),
               child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text("نۆرەی: ${activePlayer.name}", style: TextStyle(color: activePlayer.color, fontWeight: FontWeight.bold, fontSize: 16)),
-                  Row(children: [
-                    IconButton(icon: const Icon(Icons.person_add, color: Colors.cyanAccent), onPressed: _showAddPlayerDialog),
-                    IconButton(icon: const Icon(Icons.refresh, color: Colors.amber), onPressed: resetGame),
-                  ])
-                ],
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: List.generate(players.length, (index) {
+                  final p = players[index];
+                  bool isCurrent = index == currentPlayerIndex;
+                  return InkWell(
+                    onTap: () => _showEditPlayerDialog(index),
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: isCurrent ? p.color : Colors.transparent, width: 1.5),
+                        borderRadius: BorderRadius.circular(8),
+                        color: isCurrent ? p.color.withOpacity(0.1) : Colors.transparent,
+                      ),
+                      child: Column(
+                        children: [
+                          Text(p.name, style: TextStyle(color: p.color, fontWeight: FontWeight.bold, fontSize: 13)),
+                          const SizedBox(height: 2),
+                          Text("خانەی: ${p.position}", style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11)),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
               ),
             ),
+            
             Expanded(
               child: Center(
                 child: GestureDetector(
                   onTap: isRolling || isMoving || gameFinished ? null : rollDice,
-                  child: Container(
-                    margin: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(24), 
-                      border: Border.all(color: activePlayer.color.withOpacity(0.3), width: 1.5),
-                      boxShadow: [BoxShadow(color: activePlayer.color.withOpacity(0.1), blurRadius: 20, spreadRadius: 2)]
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(24),
-                      child: AspectRatio(
-                        aspectRatio: 1.0,
-                        child: LayoutBuilder(
-                          builder: (context, constraints) {
-                            final bSize = constraints.maxWidth; final cSize = bSize / 10;
-                            return AnimatedRotation(
-                              turns: currentTurns, 
-                              duration: const Duration(milliseconds: 600), 
-                              curve: Curves.easeInOutCubic,
-                              child: Stack(
+                  child: AnimatedRotation(
+                    turns: currentTurns, 
+                    duration: const Duration(milliseconds: 600), 
+                    curve: Curves.easeInOutCubic,
+                    child: Container(
+                      margin: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20), 
+                        border: Border.all(color: activePlayer.color.withOpacity(0.3), width: 2),
+                        boxShadow: [BoxShadow(color: activePlayer.color.withOpacity(0.15), blurRadius: 25, spreadRadius: 2)]
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: AspectRatio(
+                          aspectRatio: 1.0,
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final bSize = constraints.maxWidth; final cSize = bSize / 10;
+                              return Stack(
                                 children: [
+                                  // بۆردی ٣ دووری لەگەڵ ژمارەکان
                                   GridView.builder(
                                     physics: const NeverScrollableScrollPhysics(), 
                                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 10), 
@@ -193,20 +222,21 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                                       int cellNum = _getDisplayCellNumber(idx);
                                       return Container(
                                         decoration: BoxDecoration(
-                                          color: idx % 2 == 0 ? const Color(0xFF10121E) : const Color(0xFF07080F), 
-                                          border: Border.all(color: Colors.white10, width: 0.2)
+                                          color: idx % 2 == 0 ? const Color(0xFF121424) : const Color(0xFF090A12), 
+                                          border: Border.all(color: Colors.white10, width: 0.3),
+                                          boxShadow: const [BoxShadow(color: Colors.black38, offset: Offset(1, 1), blurRadius: 1, inset: true)]
                                         ),
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(4.0),
+                                        child: Center(
                                           child: AnimatedRotation(
                                             turns: -currentTurns,
                                             duration: const Duration(milliseconds: 600),
                                             child: Text(
                                               "$cellNum",
                                               style: TextStyle(
-                                                fontSize: cSize * 0.24,
-                                                color: Colors.white.withOpacity(0.25),
-                                                fontWeight: FontWeight.w600 // کێشی فۆنتەکە بۆ رێگریکردن لە کێشەی گرادڵ چاککراوە
+                                                fontSize: cSize * 0.28,
+                                                color: Colors.white.withOpacity(0.2),
+                                                fontWeight: FontWeight.w600,
+                                                shadows: [Shadow(color: Colors.black.withOpacity(0.8), offset: const Offset(1, 1), blurRadius: 2)]
                                               ),
                                             ),
                                           ),
@@ -214,9 +244,29 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                                       );
                                     },
                                   ),
-                                  Positioned.fill(child: IgnorePointer(child: AnimatedBuilder(animation: _liveBoardController, builder: (context, child) => CustomPaint(painter: AdvancedBoardPainter(snakes: snakes, ladders: ladders, animationValue: _liveBoardController.value, effectCell: effectCell, effectColor: effectColor, effectRadius: effectRadius))))),
+                                  
+                                  // وێنەکێشی مارە زیندووەکان و پەیژەکان
+                                  Positioned.fill(
+                                    child: IgnorePointer(
+                                      child: AnimatedBuilder(
+                                        animation: _liveBoardController, 
+                                        builder: (context, child) => CustomPaint(
+                                          painter: AdvancedBoardPainter(
+                                            snakes: snakes, 
+                                            ladders: ladders, 
+                                            animationValue: _liveBoardController.value, 
+                                            effectCell: effectCell, 
+                                            effectColor: effectColor, 
+                                            effectRadius: effectRadius
+                                          )
+                                        )
+                                      )
+                                    )
+                                  ),
+                                  
+                                  // مۆرەکان
                                   ...List.generate(players.length, (index) {
-                                    final p = players[index]; final coords = _getCellCoordinates(p.position, cSize, index);
+                                    final p = players[index]; final coords = _getCellCoordinates(p.position, cSize);
                                     return AnimatedPositioned(
                                       duration: Duration(milliseconds: (index == currentPlayerIndex && isMoving) ? 240 : 350), 
                                       curve: Curves.easeInOut, 
@@ -227,11 +277,10 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                                       child: AnimatedRotation(
                                         turns: -currentTurns,
                                         duration: const Duration(milliseconds: 600),
-                                        curve: Curves.easeInOutCubic,
                                         child: Container(
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle, 
-                                            color: p.color, 
+                                            gradient: RadialGradient(colors: [Colors.white, p.color, p.color.withOpacity(0.8)]),
                                             border: Border.all(color: Colors.white, width: 1.5),
                                             boxShadow: [BoxShadow(color: p.color.withOpacity(0.8), blurRadius: 12, spreadRadius: 2)]
                                           ),
@@ -240,9 +289,9 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                                     );
                                   }),
                                 ],
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
                       ),
                     ),
@@ -250,15 +299,16 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                 ),
               ),
             ),
-            Padding(padding: const EdgeInsets.symmetric(vertical: 12), child: Text(message, style: TextStyle(color: activePlayer.color, fontWeight: FontWeight.bold, fontSize: 15))),
             
-            // دیزاینی کایبەرپەنکی مۆدێرن بۆ زارەکە
+            Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(message, style: TextStyle(color: activePlayer.color, fontWeight: FontWeight.bold, fontSize: 14))),
+            
+            // دوگمەی زاری نیۆن
             GestureDetector(
               onTap: isRolling || isMoving || gameFinished ? null : rollDice,
               child: Container(
-                margin: const EdgeInsets.only(bottom: 25), 
-                width: 65, 
-                height: 65, 
+                margin: const EdgeInsets.only(bottom: 20), 
+                width: 60, 
+                height: 60, 
                 decoration: BoxDecoration(
                   color: const Color(0xFF11121C),
                   border: Border.all(color: activePlayer.color, width: 2), 
@@ -267,11 +317,8 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                 ),
                 child: Center(
                   child: isRolling 
-                    ? RotationTransition(
-                        turns: _diceController,
-                        child: Icon(Icons.casino, size: 32, color: activePlayer.color),
-                      )
-                    : Text("$diceValue", style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: activePlayer.color, shadows: [Shadow(color: activePlayer.color, blurRadius: 10)]))
+                    ? RotationTransition(turns: _diceController, child: Icon(Icons.casino, size: 30, color: activePlayer.color))
+                    : Text("$diceValue", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: activePlayer.color, shadows: [Shadow(color: activePlayer.color, blurRadius: 8)]))
                 ),
               ),
             ),
@@ -293,26 +340,58 @@ class AdvancedBoardPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // کێشانی پەیژەکان بە تیشکی نیۆنی سەوزی جێگیر
+    // ١. کێشانی پەیژەی سێ دووری (3D Ladders)
     ladders.forEach((s, e) {
       Offset pS = _getCenter(s, size), pE = _getCenter(e, size);
-      
-      // کاریگەری بڵۆڕ لە پشتەوەی پەیژەکە
-      canvas.drawLine(pS, pE, Paint()..color = const Color(0xFF00FF66).withOpacity(0.3)..strokeWidth = 10.0..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6)..style = PaintingStyle.stroke);
-      // هێڵە بنەڕەتییەکەی پەیژەکە
-      canvas.drawLine(pS, pE, Paint()..color = const Color(0xFF00FF66)..strokeWidth = 4.0..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
-      canvas.drawLine(pS, pE, Paint()..color = Colors.white.withOpacity(0.6)..strokeWidth = 1.2..style = PaintingStyle.stroke);
+      double dx = pE.dx - pS.dx; double dy = pE.dy - pS.dy;
+      double len = math.sqrt(dx * dx + dy * dy);
+      Offset ox = Offset(-dy / len * 5, dx / len * 5); // دوری نێوان دوو هێڵەکە
+
+      // کێشانی سێبەری ژێر پەیژەکە
+      canvas.drawLine(pS + const Offset(3, 3), pE + const Offset(3, 3), Paint()..color = Colors.black45..strokeWidth = 6.0);
+
+      // ڕاگرە سەرەکییەکان
+      canvas.drawLine(pS - ox, pE - ox, Paint()..color = const Color(0xFFFFCC00)..strokeWidth = 3.5);
+      canvas.drawLine(pS + ox, pE + ox, Paint()..color = const Color(0xFFFFCC00)..strokeWidth = 3.5);
+
+      // پێپەژەکان (Rungs)
+      int rungs = (len / 12).floor();
+      for (int i = 0; i <= rungs; i++) {
+        double t = i / rungs;
+        Offset pR1 = Offset.lerp(pS - ox, pE - ox, t)!;
+        Offset pR2 = Offset.lerp(pS + ox, pE + ox, t)!;
+        canvas.drawLine(pR1, pR2, Paint()..color = Colors.white70..strokeWidth = 2.0);
+      }
     });
 
-    // کێشانی مارەکان بە تیشکی نیۆنی سوور
+    // ٢. کێشانی ماری ئەنیمەیشنی ڕاستەقینە (Animated Snakes with Sinusoidal Wave)
     snakes.forEach((s, e) {
-      Offset pS = _getCenter(s, size), pE = _getCenter(e, size);
-      
-      // کاریگەری بڵۆڕ لە پشتەوەی مارەکە
-      canvas.drawLine(pS, pE, Paint()..color = const Color(0xFFFF3366).withOpacity(0.3)..strokeWidth = 10.0..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6)..style = PaintingStyle.stroke);
-      // لایەنی سەرەکی مارەکە
-      canvas.drawLine(pS, pE, Paint()..color = const Color(0xFFFF3366)..strokeWidth = 4.5..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
+      Offset pS = _getCenter(s, size); Offset pE = _getCenter(e, size);
+      Path snakePath = Path();
+      snakePath.moveTo(pS.dx, pS.dy);
+
+      double dx = pE.dx - pS.dx; double dy = pE.dy - pS.dy;
+      double len = math.sqrt(dx * dx + dy * dy);
+      int segments = 15;
+
+      for (int i = 1; i <= segments; i++) {
+        double t = i / segments;
+        Offset loc = Offset.lerp(pS, pE, t)!;
+        
+        // دروستکردنی شەپۆل و لەرینەوەی مارەکە بەپێی کات (Live Animation)
+        double wave = math.sin((t * math.pi * 3) - (animationValue * math.pi * 2)) * 8;
+        Offset normal = Offset(-dy / len * wave, dx / len * wave);
+        
+        snakePath.lineTo(loc.dx + normal.dx, loc.dy + normal.dy);
+      }
+
+      // کێشانی جەستەی مارەکە بە نیۆنی گەشاوە
+      canvas.drawPath(snakePath, Paint()..color = const Color(0xFFFF3366).withOpacity(0.25)..strokeWidth = 10.0..style = PaintingStyle.stroke..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+      canvas.drawPath(snakePath, Paint()..color = const Color(0xFFFF3366)..strokeWidth = 4.0..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
+
+      // کێشانی سەری مارەکە
       canvas.drawCircle(pS, 6, Paint()..color = Colors.redAccent);
+      canvas.drawCircle(pS, 2, Paint()..color = Colors.white);
     });
 
     if (effectCell != -1) canvas.drawCircle(_getCenter(effectCell, size), (size.width / 10) * 1.2 * effectRadius, Paint()..color = effectColor.withOpacity(1.0 - effectRadius)..style = PaintingStyle.stroke..strokeWidth = 3.0);
