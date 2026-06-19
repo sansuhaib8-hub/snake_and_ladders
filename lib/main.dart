@@ -10,7 +10,12 @@ class CyberSnakeLaddersApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'کایەی مار و پەیژە',
-      theme: ThemeData(useMaterial3: true, brightness: Brightness.dark, fontFamily: 'Segoe UI'),
+      theme: ThemeData(
+        useMaterial3: true,
+        brightness: Brightness.dark,
+        fontFamily: 'Segoe UI',
+        scaffoldBackgroundColor: const Color(0xFF040508),
+      ),
       home: const CyberGamePage(),
       debugShowCheckedModeBanner: false,
     );
@@ -18,8 +23,17 @@ class CyberSnakeLaddersApp extends StatelessWidget {
 }
 
 class Player {
-  String name; int position; Color color;
-  Player({required this.name, this.position = 1, required this.color});
+  String name;
+  int position;
+  Color color;
+  bool isWinner;
+  
+  Player({
+    required this.name,
+    this.position = 0,
+    required this.color,
+    this.isWinner = false,
+  });
 }
 
 class CyberGamePage extends StatefulWidget {
@@ -28,42 +42,64 @@ class CyberGamePage extends StatefulWidget {
   State<CyberGamePage> createState() => _CyberGamePageState();
 }
 
-class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateMixin {
+class _CyberGamePageState extends State<CyberGamePage> 
+    with TickerProviderStateMixin {
+  
   List<Player> players = [
     Player(name: "یاریزان ١", color: const Color(0xFF00FFFF)),
-    Player(name: "یاریزان ٢", color: const Color(0xFFFF00FF)),
-    Player(name: "یاریزان ٣", color: const Color(0xFF00FF66)),
+    Player(name: "یاریزان ٢", color: const Color(0xFFFF00FF)),    Player(name: "یاریزان ٣", color: const Color(0xFF00FF66)),
     Player(name: "یاریزان ٤", color: const Color(0xFFFFCC00)),
   ];
-  int currentPlayerIndex = 0; int diceValue = 1;
-  bool isRolling = false; bool isMoving = false; bool gameFinished = false;
+  
+  int currentPlayerIndex = 0;
+  int diceValue = 1;
+  bool isRolling = false;
+  bool isMoving = false;
+  bool gameFinished = false;
   String message = "بۆ هاویشتنی زار، کلیک لە بۆردەکە بکە! 🎲";
-  int effectCell = -1; Color effectColor = Colors.transparent; double effectRadius = 0.0;
-
-  late AnimationController _diceController, _bounceController, _liveBoardController;
-
-  final Map<int, int> snakes = {17: 7, 54: 34, 62: 19, 64: 60, 87: 24, 93: 73, 95: 75, 99: 78};
-  final Map<int, int> ladders = {4: 14, 9: 31, 20: 38, 28: 84, 40: 59, 51: 67, 63: 81, 71: 91};
+  
+  late AnimationController _diceController;
+  late AnimationController _bounceController;
+  late AnimationController _glowController;
+  late AnimationController _celebrationController;
+  
+  final Map<int, int> snakes = {
+    17: 7, 54: 34, 62: 19, 64: 60, 
+    87: 24, 93: 73, 95: 75, 99: 78
+  };
+  
+  final Map<int, int> ladders = {
+    4: 14, 9: 31, 20: 38, 28: 84, 
+    40: 59, 51: 67, 63: 81, 71: 91
+  };
 
   @override
   void initState() {
     super.initState();
-    _diceController = AnimationController(duration: const Duration(milliseconds: 600), vsync: this);
-    _bounceController = AnimationController(duration: const Duration(milliseconds: 250), vsync: this);
-    _liveBoardController = AnimationController(duration: const Duration(seconds: 2), vsync: this)..repeat();
+    _diceController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _bounceController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    _glowController = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    )..repeat(reverse: true);
+    _celebrationController = AnimationController(
+      duration: const Duration(seconds: 3),
+      vsync: this,
+    );
   }
 
   @override
-  void dispose() { _diceController.dispose(); _bounceController.dispose(); _liveBoardController.dispose(); super.dispose(); }
-
-  double _getBoardRotation() {
-    switch (currentPlayerIndex) {
-      case 0: return 0.0;
-      case 1: return -math.pi / 2;
-      case 2: return math.pi;
-      case 3: return math.pi / 2;
-      default: return 0.0;
-    }
+  void dispose() {
+    _diceController.dispose();    _bounceController.dispose();
+    _glowController.dispose();
+    _celebrationController.dispose();
+    super.dispose();
   }
 
   int _getDisplayCellNumber(int gridIndex) {
@@ -74,91 +110,244 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
     return (actualRow * 10) + actualCol + 1;
   }
 
-  void _triggerCellEffect(int cell, Color color) {
-    setState(() { effectCell = cell; effectColor = color; effectRadius = 0.0; });
-    Timer.periodic(const Duration(milliseconds: 16), (timer) {
-      if (!mounted) { timer.cancel(); return; }
-      setState(() { effectRadius += 0.08; if (effectRadius >= 1.0) { effectCell = -1; timer.cancel(); } });
-    });
-  }
-
   void _showEditPlayerDialog(int index) {
     final textController = TextEditingController(text: players[index].name);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF11121C),
-        title: Text("گۆڕینی ناوی ${players[index].name}", style: const TextStyle(color: Colors.white, fontSize: 16)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: players[index].color.withOpacity(0.5), width: 2),
+        ),
+        title: Text(
+          "گۆڕینی ناوی ${players[index].name}",
+          style: TextStyle(
+            color: players[index].color,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         content: TextField(
-          controller: textController, 
+          controller: textController,
           style: const TextStyle(color: Colors.white),
-          decoration: const InputDecoration(enabledBorder: UnderlineInputBorder(borderSide: BorderSide(color: Colors.cyan))),
+          decoration: InputDecoration(
+            enabledBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: players[index].color),
+            ),
+            focusedBorder: UnderlineInputBorder(
+              borderSide: BorderSide(color: players[index].color, width: 2),
+            ),
+          ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text("پاشگەزمایەوە", style: TextStyle(color: Colors.grey))),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text(
+              "پاشگەزمایەوە",
+              style: TextStyle(color: Colors.grey),            ),
+          ),
           ElevatedButton(
-            onPressed: () { 
-              if (textController.text.trim().isNotEmpty) { 
-                setState(() { players[index].name = textController.text.trim(); }); 
-                Navigator.pop(context); 
-              } 
-            }, 
-            child: const Text("تۆمارکردن")
-          )
+            onPressed: () {
+              if (textController.text.trim().isNotEmpty) {
+                setState(() {
+                  players[index].name = textController.text.trim();
+                });
+                Navigator.pop(context);
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: players[index].color,
+              foregroundColor: Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+            ),
+            child: const Text("تۆمارکردن"),
+          ),
         ],
       ),
     );
   }
 
   Offset _getCellCoordinates(int pos, double cSize) {
-    int idx = pos - 1; int row = idx ~/ 10; int col = idx % 10;
+    if (pos == 0) return Offset(cSize * 0.5, cSize * 0.5);
+    int idx = pos - 1;
+    int row = idx ~/ 10;
+    int col = idx % 10;
     if (row % 2 == 1) col = 9 - col;
-    double padding = (cSize - (cSize * 0.45)) / 2;
+    double padding = (cSize - (cSize * 0.5)) / 2;
     return Offset(col * cSize + padding, (9 - row) * cSize + padding);
   }
 
   void rollDice() async {
     if (isRolling || isMoving || gameFinished) return;
+    
     Player cp = players[currentPlayerIndex];
-    setState(() { isRolling = true; message = "[ ${cp.name} ] زارەکە دەهاوێژێت... 🎲"; });
-    _diceController.forward(from: 0.0); await Future.delayed(const Duration(milliseconds: 600));
-    final res = math.Random().nextInt(6) + 1; setState(() { diceValue = res; isRolling = false; });
+    setState(() {
+      isRolling = true;
+      message = "[ ${cp.name} ] زارەکە دەهاوێژێت... 🎲";
+    });
+    
+    _diceController.forward(from: 0.0);
+    await Future.delayed(const Duration(milliseconds: 800));
+    
+    final res = math.Random().nextInt(6) + 1;
+    setState(() {
+      diceValue = res;      isRolling = false;
+    });
+    
     int target = cp.position + diceValue;
-    if (target > 100) { setState(() { message = "⚠️ ژمارەی دەقیقی دەوێت!"; _nextTurn(); }); return; }
+    
+    if (target > 100) {
+      setState(() {
+        message = "⚠️ ژمارەی دەقیقی دەوێت!";
+      });
+      await Future.delayed(const Duration(milliseconds: 1500));
+      _nextTurn();
+      return;
+    }
+    
     isMoving = true;
+    
+    // Move player step by step
     for (int i = cp.position + 1; i <= target; i++) {
-      setState(() { cp.position = i; }); _bounceController.forward(from: 0.0);
-      await Future.delayed(const Duration(milliseconds: 240));
+      setState(() {
+        cp.position = i;
+      });
+      _bounceController.forward(from: 0.0);
+      await Future.delayed(const Duration(milliseconds: 250));
     }
+    
+    // Check for ladder
     if (ladders.containsKey(cp.position)) {
-      _triggerCellEffect(cp.position, Colors.amberAccent); cp.position = ladders[cp.position]!;
+      setState(() {
+        message = "🪜 [ ${cp.name} ] پەیژەیەکی دۆزییەوە! ⬆️";
+      });
+      await Future.delayed(const Duration(milliseconds: 500));
+      setState(() {
+        cp.position = ladders[cp.position]!;
+      });
       await Future.delayed(const Duration(milliseconds: 600));
-    } else if (snakes.containsKey(cp.position)) {
-      _triggerCellEffect(cp.position, Colors.redAccent); cp.position = snakes[cp.position]!;
+    } 
+    // Check for snake
+    else if (snakes.containsKey(cp.position)) {
+      setState(() {
+        message = "🐍 [ ${cp.name} ] بە مارەکە گیرا! ⬇️";
+      });
+      await Future.delayed(const Duration(milliseconds: 500));
+      setState(() {
+        cp.position = snakes[cp.position]!;
+      });
       await Future.delayed(const Duration(milliseconds: 600));
     }
-    if (cp.position == 100) { setState(() { gameFinished = true; message = "👑 [ ${cp.name} ] بردییەوە! 👑"; }); isMoving = false; return; }
-    _nextTurn(); isMoving = false;
+    
+    // Check for win
+    if (cp.position == 100) {      setState(() {
+        gameFinished = true;
+        cp.isWinner = true;
+        message = "👑 [ ${cp.name} ] بردییەوە! 👑";
+      });
+      _celebrationController.forward();
+      _showWinDialog(cp);
+      isMoving = false;
+      return;
+    }
+    
+    _nextTurn();
+    isMoving = false;
   }
-  
-  void _nextTurn() { setState(() { currentPlayerIndex = (currentPlayerIndex + 1) % players.length; }); }
-  
-  void resetGame() { setState(() { for (var p in players) { p.position = 1; } currentPlayerIndex = 0; diceValue = 1; gameFinished = false; message = "نۆرەی [ ${players[0].name} ] یە 🔥"; }); }
+
+  void _showWinDialog(Player winner) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF11121C),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: winner.color, width: 3),
+        ),
+        title: Column(
+          children: [
+            const Icon(Icons.emoji_events, size: 60, color: Colors.amber),
+            const SizedBox(height: 10),
+            Text(
+              "🎉 بردنەوە! 🎉",
+              style: TextStyle(
+                color: winner.color,
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          "[ ${winner.name} ] بردییەوە!",
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: Colors.white, fontSize: 18),
+        ),
+        actions: [
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              resetGame();
+            },            icon: const Icon(Icons.refresh),
+            label: const Text("یاری نوێ"),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: winner.color,
+              foregroundColor: Colors.black,
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _nextTurn() {
+    setState(() {
+      currentPlayerIndex = (currentPlayerIndex + 1) % players.length;
+      message = "نۆرەی [ ${players[currentPlayerIndex].name} ] یە 🔥";
+    });
+  }
+
+  void resetGame() {
+    setState(() {
+      for (var p in players) {
+        p.position = 0;
+        p.isWinner = false;
+      }
+      currentPlayerIndex = 0;
+      diceValue = 1;
+      gameFinished = false;
+      message = "نۆرەی [ ${players[0].name} ] یە 🔥";
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     Player activePlayer = players[currentPlayerIndex];
-    double currentTurns = _getBoardRotation() / (2 * math.pi);
 
     return Scaffold(
       backgroundColor: const Color(0xFF040508),
       body: SafeArea(
         child: Column(
           children: [
+            // Player info bar
             Container(
-              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
               margin: const EdgeInsets.all(8),
-              decoration: BoxDecoration(color: const Color(0xFF0D0E15), borderRadius: BorderRadius.circular(16)),
+              decoration: BoxDecoration(                color: const Color(0xFF0D0E15),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: activePlayer.color.withOpacity(0.3),
+                  width: 1,
+                ),
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: List.generate(players.length, (index) {
@@ -166,19 +355,66 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                   bool isCurrent = index == currentPlayerIndex;
                   return InkWell(
                     onTap: () => _showEditPlayerDialog(index),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    borderRadius: BorderRadius.circular(12),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
-                        border: Border.all(color: isCurrent ? p.color : Colors.transparent, width: 1.5),
-                        borderRadius: BorderRadius.circular(8),
-                        color: isCurrent ? p.color.withOpacity(0.1) : Colors.transparent,
+                        border: Border.all(
+                          color: isCurrent ? p.color : Colors.transparent,
+                          width: 2,
+                        ),
+                        borderRadius: BorderRadius.circular(12),
+                        color: isCurrent ? p.color.withOpacity(0.15) : Colors.transparent,
+                        boxShadow: isCurrent
+                            ? [
+                                BoxShadow(
+                                  color: p.color.withOpacity(0.4),
+                                  blurRadius: 12,
+                                  spreadRadius: 1,
+                                ),
+                              ]
+                            : null,
                       ),
                       child: Column(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(p.name, style: TextStyle(color: p.color, fontWeight: FontWeight.bold, fontSize: 13)),
-                          const SizedBox(height: 2),
-                          Text("خانەی: ${p.position}", style: TextStyle(color: Colors.white.withOpacity(0.6), fontSize: 11)),
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: p.color,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: p.color.withOpacity(0.6),                                      blurRadius: 6,
+                                      spreadRadius: 1,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                p.name,
+                                style: TextStyle(
+                                  color: isCurrent ? p.color : Colors.white70,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            "خانەی: ${p.position}",
+                            style: TextStyle(
+                              color: Colors.white.withOpacity(0.6),
+                              fontSize: 11,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -186,106 +422,136 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                 }),
               ),
             ),
-            
+
+            // Game board
             Expanded(
               child: Center(
                 child: GestureDetector(
                   onTap: isRolling || isMoving || gameFinished ? null : rollDice,
-                  child: AnimatedRotation(
-                    turns: currentTurns, 
-                    duration: const Duration(milliseconds: 600), 
-                    curve: Curves.easeInOutCubic,
-                    child: Container(
-                      margin: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20), 
-                        border: Border.all(color: activePlayer.color.withOpacity(0.3), width: 2),
-                        boxShadow: [BoxShadow(color: activePlayer.color.withOpacity(0.15), blurRadius: 25, spreadRadius: 2)]
+                  child: Container(
+                    margin: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(
+                        color: activePlayer.color.withOpacity(0.4),
+                        width: 2,
                       ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(18),
-                        child: AspectRatio(
-                          aspectRatio: 1.0,
-                          child: LayoutBuilder(
-                            builder: (context, constraints) {
-                              final bSize = constraints.maxWidth; final cSize = bSize / 10;
-                              return Stack(
-                                children: [
-                                  GridView.builder(
-                                    physics: const NeverScrollableScrollPhysics(), 
-                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 10), 
-                                    itemCount: 100,
-                                    itemBuilder: (context, idx) {
-                                      int cellNum = _getDisplayCellNumber(idx);
-                                      return Container(
-                                        decoration: BoxDecoration(
-                                          color: idx % 2 == 0 ? const Color(0xFF121424) : const Color(0xFF090A12), 
-                                          border: Border.all(color: Colors.black45, width: 0.5), // ڕەنگی بۆردەر بۆ دروستکردنی قووڵایی چاککراوە
-                                        ),
-                                        child: Center(
-                                          child: AnimatedRotation(
-                                            turns: -currentTurns,
-                                            duration: const Duration(milliseconds: 600),
-                                            child: Text(
-                                              "$cellNum",
-                                              style: TextStyle(
-                                                fontSize: cSize * 0.28,
-                                                color: Colors.white.withOpacity(0.2),
-                                                fontWeight: FontWeight.w600,
-                                                shadows: [Shadow(color: Colors.black.withOpacity(0.8), offset: const Offset(1, 1), blurRadius: 2)]
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      );
-                                    },
+                      boxShadow: [
+                        BoxShadow(
+                          color: activePlayer.color.withOpacity(0.2),
+                          blurRadius: 30,                          spreadRadius: 3,
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: AspectRatio(
+                        aspectRatio: 1.0,
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final bSize = constraints.maxWidth;
+                            final cSize = bSize / 10;
+                            return Stack(
+                              children: [
+                                // Grid cells
+                                GridView.builder(
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                    crossAxisCount: 10,
                                   ),
-                                  
-                                  Positioned.fill(
-                                    child: IgnorePointer(
-                                      child: AnimatedBuilder(
-                                        animation: _liveBoardController, 
-                                        builder: (context, child) => CustomPaint(
-                                          painter: AdvancedBoardPainter(
-                                            snakes: snakes, 
-                                            ladders: ladders, 
-                                            animationValue: _liveBoardController.value, 
-                                            effectCell: effectCell, 
-                                            effectColor: effectColor, 
-                                            effectRadius: effectRadius
-                                          )
-                                        )
-                                      )
-                                    )
-                                  ),
-                                  
-                                  ...List.generate(players.length, (index) {
-                                    final p = players[index]; final coords = _getCellCoordinates(p.position, cSize);
-                                    return AnimatedPositioned(
-                                      duration: Duration(milliseconds: (index == currentPlayerIndex && isMoving) ? 240 : 350), 
-                                      curve: Curves.easeInOut, 
-                                      left: coords.dx, 
-                                      top: coords.dy, 
-                                      width: cSize * 0.45, 
-                                      height: cSize * 0.45,
-                                      child: AnimatedRotation(
-                                        turns: -currentTurns,
-                                        duration: const Duration(milliseconds: 600),
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            shape: BoxShape.circle, 
-                                            gradient: RadialGradient(colors: [Colors.white, p.color, p.color.withOpacity(0.8)]),
-                                            border: Border.all(color: Colors.white, width: 1.5),
-                                            boxShadow: [BoxShadow(color: p.color.withOpacity(0.8), blurRadius: 12, spreadRadius: 2)]
-                                          ),
+                                  itemCount: 100,
+                                  itemBuilder: (context, idx) {
+                                    int cellNum = _getDisplayCellNumber(idx);
+                                    bool isSnakeHead = snakes.containsKey(cellNum);
+                                    bool isLadderBottom = ladders.containsKey(cellNum);
+                                    
+                                    return Container(
+                                      decoration: BoxDecoration(
+                                        color: idx % 2 == 0
+                                            ? const Color(0xFF121424)
+                                            : const Color(0xFF090A12),
+                                        border: Border.all(
+                                          color: Colors.black45,
+                                          width: 0.5,
                                         ),
                                       ),
-                                    );
-                                  }),
-                                ],
-                              );
-                            },
-                          ),
+                                      child: Center(
+                                        child: Text(
+                                          "$cellNum",
+                                          style: TextStyle(
+                                            fontSize: cSize * 0.3,
+                                            color: isSnakeHead
+                                                ? Colors.redAccent.withOpacity(0.6)
+                                                : isLadderBottom
+                                                    ? Colors.amber.withOpacity(0.6)
+                                                    : Colors.white.withOpacity(0.25),
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),                                    );
+                                  },
+                                ),
+
+                                // Snakes and ladders
+                                Positioned.fill(
+                                  child: IgnorePointer(
+                                    child: AnimatedBuilder(
+                                      animation: _glowController,
+                                      builder: (context, child) => CustomPaint(
+                                        painter: AdvancedBoardPainter(
+                                          snakes: snakes,
+                                          ladders: ladders,
+                                          animationValue: _glowController.value,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+
+                                // Players
+                                ...List.generate(players.length, (index) {
+                                  final p = players[index];
+                                  final coords = _getCellCoordinates(p.position, cSize);
+                                  return AnimatedPositioned(
+                                    duration: Duration(
+                                      milliseconds: (index == currentPlayerIndex && isMoving) ? 250 : 350,
+                                    ),
+                                    curve: Curves.easeInOut,
+                                    left: coords.dx,
+                                    top: coords.dy,
+                                    width: cSize * 0.5,
+                                    height: cSize * 0.5,
+                                    child: AnimatedScale(
+                                      scale: (index == currentPlayerIndex && isMoving) ? 1.2 : 1.0,
+                                      duration: const Duration(milliseconds: 250),
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: RadialGradient(
+                                            colors: [
+                                              Colors.white,
+                                              p.color,
+                                              p.color.withOpacity(0.8),
+                                            ],
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.white,
+                                            width: 2,
+                                          ),                                          boxShadow: [
+                                            BoxShadow(
+                                              color: p.color.withOpacity(0.8),
+                                              blurRadius: 15,
+                                              spreadRadius: 2,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ],
+                            );
+                          },
                         ),
                       ),
                     ),
@@ -293,28 +559,85 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
                 ),
               ),
             ),
-            
-            Padding(padding: const EdgeInsets.symmetric(vertical: 8), child: Text(message, style: TextStyle(color: activePlayer.color, fontWeight: FontWeight.bold, fontSize: 14))),
-            
-            GestureDetector(
-              onTap: isRolling || isMoving || gameFinished ? null : rollDice,
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 20), 
-                width: 60, 
-                height: 60, 
-                decoration: BoxDecoration(
-                  color: const Color(0xFF11121C),
-                  border: Border.all(color: activePlayer.color, width: 2), 
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [BoxShadow(color: activePlayer.color.withOpacity(0.4), blurRadius: 15, spreadRadius: 1)]
-                ),
-                child: Center(
-                  child: isRolling 
-                    ? RotationTransition(turns: _diceController, child: Icon(Icons.casino, size: 30, color: activePlayer.color))
-                    : Text("$diceValue", style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: activePlayer.color, shadows: [Shadow(color: activePlayer.color, blurRadius: 8)]))
+
+            // Message
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                message,
+                style: TextStyle(
+                  color: activePlayer.color,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 15,
                 ),
               ),
             ),
+
+            // Dice and reset button
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                // Reset button
+                IconButton(
+                  onPressed: gameFinished ? resetGame : null,
+                  icon: Icon(
+                    Icons.refresh,
+                    color: gameFinished ? activePlayer.color : Colors.grey,
+                    size: 32,
+                  ),
+                ),
+                const SizedBox(width: 20),                
+                // Dice
+                GestureDetector(
+                  onTap: isRolling || isMoving || gameFinished ? null : rollDice,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: 70,
+                    height: 70,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF11121C),
+                      border: Border.all(
+                        color: activePlayer.color,
+                        width: 2.5,
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: activePlayer.color.withOpacity(0.5),
+                          blurRadius: 20,
+                          spreadRadius: 2,
+                        ),
+                      ],
+                    ),
+                    child: Center(
+                      child: isRolling
+                          ? RotationTransition(
+                              turns: _diceController,
+                              child: Icon(
+                                Icons.casino,
+                                size: 36,
+                                color: activePlayer.color,
+                              ),
+                            )
+                          : Text(
+                              "$diceValue",
+                              style: TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                                color: activePlayer.color,
+                                shadows: [
+                                  Shadow(
+                                    color: activePlayer.color,
+                                    blurRadius: 10,
+                                  ),
+                                ],
+                              ),
+                            ),
+                    ),
+                  ),
+                ),              ],
+            ),
+            const SizedBox(height: 20),
           ],
         ),
       ),
@@ -323,60 +646,132 @@ class _CyberGamePageState extends State<CyberGamePage> with TickerProviderStateM
 }
 
 class AdvancedBoardPainter extends CustomPainter {
-  final Map<int, int> snakes, ladders; final double animationValue, effectRadius; final int effectCell; final Color effectColor;
-  AdvancedBoardPainter({required this.snakes, required this.ladders, required this.animationValue, required this.effectCell, required this.effectColor, required this.effectRadius});
+  final Map<int, int> snakes, ladders;
+  final double animationValue;
+
+  AdvancedBoardPainter({
+    required this.snakes,
+    required this.ladders,
+    required this.animationValue,
+  });
 
   Offset _getCenter(int cell, Size size) {
-    double cw = size.width / 10, ch = size.height / 10; int idx = cell - 1, row = idx ~/ 10, col = idx % 10;
-    if (row % 2 == 1) col = 9 - col; return Offset((col + 0.5) * cw, (9 - row + 0.5) * ch);
+    double cw = size.width / 10;
+    double ch = size.height / 10;
+    int idx = cell - 1;
+    int row = idx ~/ 10;
+    int col = idx % 10;
+    if (row % 2 == 1) col = 9 - col;
+    return Offset((col + 0.5) * cw, (9 - row + 0.5) * ch);
   }
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Draw ladders
     ladders.forEach((s, e) {
-      Offset pS = _getCenter(s, size), pE = _getCenter(e, size);
-      double dx = pE.dx - pS.dx; double dy = pE.dy - pS.dy;
+      Offset pS = _getCenter(s, size);
+      Offset pE = _getCenter(e, size);
+      double dx = pE.dx - pS.dx;
+      double dy = pE.dy - pS.dy;
       double len = math.sqrt(dx * dx + dy * dy);
-      Offset _ox = Offset(-dy / len * 5, dx / len * 5);
+      Offset ox = Offset(-dy / len * 6, dx / len * 6);
 
-      canvas.drawLine(pS + const Offset(3, 3), pE + const Offset(3, 3), Paint()..color = Colors.black45..strokeWidth = 6.0);
-      canvas.drawLine(pS - _ox, pE - _ox, Paint()..color = const Color(0xFFFFCC00)..strokeWidth = 3.5);
-      canvas.drawLine(pS + _ox, pE + _ox, Paint()..color = const Color(0xFFFFCC00)..strokeWidth = 3.5);
+      // Shadow
+      canvas.drawLine(
+        pS + const Offset(3, 3),
+        pE + const Offset(3, 3),
+        Paint()
+          ..color = Colors.black45
+          ..strokeWidth = 8.0,
+      );
+      // Side rails
+      canvas.drawLine(
+        pS - ox,
+        pE - ox,
+        Paint()
+          ..color = const Color(0xFFFFCC00)
+          ..strokeWidth = 4.0
+          ..strokeCap = StrokeCap.round,
+      );
+      canvas.drawLine(
+        pS + ox,
+        pE + ox,
+        Paint()
+          ..color = const Color(0xFFFFCC00)
+          ..strokeWidth = 4.0
+          ..strokeCap = StrokeCap.round,
+      );
 
-      int rungs = (len / 12).floor();
-      for (int i = 0; i <= rungs; i++) {
+      // Rungs
+      int rungs = (len / 15).floor();
+      for (int i = 1; i < rungs; i++) {
         double t = i / rungs;
-        Offset pR1 = Offset.lerp(pS - _ox, pE - _ox, t)!;
-        Offset pR2 = Offset.lerp(pS + _ox, pE + _ox, t)!;
-        canvas.drawLine(pR1, pR2, Paint()..color = Colors.white70..strokeWidth = 2.0);
+        Offset pR1 = Offset.lerp(pS - ox, pE - ox, t)!;
+        Offset pR2 = Offset.lerp(pS + ox, pE + ox, t)!;
+        canvas.drawLine(
+          pR1,
+          pR2,
+          Paint()
+            ..color = Colors.white70
+            ..strokeWidth = 2.5
+            ..strokeCap = StrokeCap.round,
+        );
       }
     });
 
+    // Draw snakes
     snakes.forEach((s, e) {
-      Offset pS = _getCenter(s, size); Offset pE = _getCenter(e, size);
+      Offset pS = _getCenter(s, size);
+      Offset pE = _getCenter(e, size);
       Path snakePath = Path();
       snakePath.moveTo(pS.dx, pS.dy);
 
-      double dx = pE.dx - pS.dx; double dy = pE.dy - pS.dy;
+      double dx = pE.dx - pS.dx;
+      double dy = pE.dy - pS.dy;
       double len = math.sqrt(dx * dx + dy * dy);
-      int segments = 15;
+      int segments = 20;
 
       for (int i = 1; i <= segments; i++) {
         double t = i / segments;
-        Offset loc = Offset.lerp(pS, pE, t)!;
-        double wave = math.sin((t * math.pi * 3) - (animationValue * math.pi * 2)) * 8;
+        Offset loc = Offset.lerp(pS, pE, t)!;        double wave = math.sin((t * math.pi * 4) - (animationValue * math.pi * 2)) * 10;
         Offset normal = Offset(-dy / len * wave, dx / len * wave);
         snakePath.lineTo(loc.dx + normal.dx, loc.dy + normal.dy);
       }
 
-      canvas.drawPath(snakePath, Paint()..color = const Color(0xFFFF3366).withOpacity(0.25)..strokeWidth = 10.0..style = PaintingStyle.stroke..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
-      canvas.drawPath(snakePath, Paint()..color = const Color(0xFFFF3366)..strokeWidth = 4.0..style = PaintingStyle.stroke..strokeCap = StrokeCap.round);
+      // Glow effect
+      canvas.drawPath(
+        snakePath,
+        Paint()
+          ..color = const Color(0xFFFF3366).withOpacity(0.3)
+          ..strokeWidth = 12.0
+          ..style = PaintingStyle.stroke
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+      );
 
-      canvas.drawCircle(pS, 6, Paint()..color = Colors.redAccent);
-      canvas.drawCircle(pS, 2, Paint()..color = Colors.white);
+      // Main snake body
+      canvas.drawPath(
+        snakePath,
+        Paint()
+          ..color = const Color(0xFFFF3366)
+          ..strokeWidth = 5.0
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round,
+      );
+
+      // Snake head
+      canvas.drawCircle(
+        pS,
+        8,
+        Paint()..color = Colors.redAccent,
+      );
+      canvas.drawCircle(
+        pS,
+        3,
+        Paint()..color = Colors.white,
+      );
     });
-
-    if (effectCell != -1) canvas.drawCircle(_getCenter(effectCell, size), (size.width / 10) * 1.2 * effectRadius, Paint()..color = effectColor.withOpacity(1.0 - effectRadius)..style = PaintingStyle.stroke..strokeWidth = 3.0);
   }
-  @override bool shouldRepaint(covariant AdvancedBoardPainter old) => true;
+
+  @override
+  bool shouldRepaint(covariant AdvancedBoardPainter old) => true;
 }
